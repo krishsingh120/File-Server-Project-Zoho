@@ -100,6 +100,41 @@
 
 ---
 
+
+# 🧾 Commit Types — Github standards
+
+---
+
+## 📌 Standard Commit Types
+
+| Type     | Matlab                | Example                              |
+|----------|----------------------|--------------------------------------|
+| feat     | Naya feature         | feat: add user login endpoint        |
+| fix      | Bug fix              | fix: resolve jwt expiry issue        |
+| chore    | Setup / maintenance  | chore: install dependencies          |
+| refactor | Code improve         | refactor: clean auth service         |
+| docs     | Documentation        | docs: add API readme                 |
+| test     | Testing              | test: add auth unit tests            |
+| style    | Formatting           | style: fix indentation               |
+
+---
+
+## 🎯 Usage Tips
+
+- Har commit meaningful hona chahiye
+- Ek commit = ek logical change
+- Clear aur concise message likho
+- Lowercase prefix use karo (feat, fix, etc.)
+
+---
+
+## 💀 Pro Tip (Interview + Real Projects)
+
+> "I follow conventional commits to maintain clean version history and improve collaboration."
+
+---
+
+
 # 📁 Folder Structure — Final
 
 ```bash
