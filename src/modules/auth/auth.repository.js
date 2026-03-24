@@ -34,6 +34,15 @@ class AuthRepository {
     return user;
   }
 
+  // auth.repository.js mein ye method update karo
+  async updateUser(filter, updateData) {
+    const user = await User.findOneAndUpdate(filter, updateData, {
+      new: true,
+      runValidators: true,
+    });
+    return user;
+  }
+
   async isEmailTaken(email) {
     const user = await User.findOne({ email });
     return !!user;
