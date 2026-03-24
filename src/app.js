@@ -2,15 +2,25 @@
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
+const cookieParser = require("cookie-parser");
 const errorHandler = require("./middleware/error.middleware");
 const NotFoundError = require("./errors/notFound.error");
+
+// Routes
+const authRoutes = require("./modules/auth/auth.routes");
 
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    credentials: true, // cookies ke liye
+  }),
+);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser()); // cookies parse karne ke liye
 app.use(morgan("dev"));
 
 // Health Check
@@ -21,6 +31,9 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// API Routes
+app.use("/api/v1/auth", authRoutes);
 
 // 404 Handler
 app.use((req, res, next) => {

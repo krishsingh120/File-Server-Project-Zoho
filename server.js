@@ -2,6 +2,7 @@
 const app = require("./src/app");
 const connectDB = require("./src/config/dbConfig");
 const { PORT } = require("./src/config/serverConfig");
+const redis = require("./src/config/redisConfig"); // ← ye add karo
 
 const startServer = async () => {
   try {
