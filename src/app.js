@@ -9,6 +9,7 @@ const NotFoundError = require("./errors/notFound.error");
 // Routes
 const authRoutes = require("./modules/auth/auth.routes");
 const filesRoutes = require("./modules/files/files.routes");
+const foldersRoutes = require("./modules/folders/folders.routes");
 
 const app = express();
 
@@ -36,6 +37,7 @@ app.get("/health", (req, res) => {
 // API Routes
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/files", filesRoutes);
+app.use("/api/v1/folders", foldersRoutes);
 
 // 404 Handler
 app.use((req, res, next) => {
