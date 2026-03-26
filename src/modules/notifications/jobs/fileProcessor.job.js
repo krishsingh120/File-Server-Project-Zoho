@@ -2,61 +2,39 @@
 const fs = require("fs");
 const path = require("path");
 const { Worker } = require("bullmq");
-const {
-  redisConnection,
-  QUEUE_NAMES,
-} = require("../../../providers/bullmq.provider");
+const { redisConnection, QUEUE_NAMES } = require("../../../providers/bullmq.provider");
 const filesRepository = require("../../files/files.repository");
+const { emitToUser, SOCKET_EVENTS } = require("../notifications.gateway");
 const logger = require("../../../utils/logger");
 
 // ─── Magic Bytes Map ──────────────────────────────────────────────────────────
-// File ke pehle kuch bytes se real type pata karte hain
-// Multer sirf extension trust karta hai — ye actual verification hai
 const MAGIC_BYTES = {
-  ffd8ff: "image/jpeg",
+  "ffd8ff":   "image/jpeg",
   "89504e47": "image/png",
-  47494638: "image/gif",
-  25504446: "application/pdf",
-  "504b0304": "application/zip", // zip, docx, xlsx bhi zip hote hain
-  52494646: "image/webp", // RIFF....WEBP
+  "47494638": "image/gif",
+  "25504446": "application/pdf",
+  "504b0304": "application/zip",
+  "52494646": "image/webp",
 };
 
-/**
- * File ke magic bytes read karo (pehle 8 bytes kaafi hain)
- * @param {string} filePath
- * @returns {string|null} detected mimeType or null
- */
 const detectMimeFromMagicBytes = (filePath) => {
   try {
     const buffer = Buffer.alloc(8);
     const fd = fs.openSync(filePath, "r");
     fs.readSync(fd, buffer, 0, 8, 0);
     fs.closeSync(fd);
-
     const hex = buffer.toString("hex").toLowerCase();
-
-    // Magic bytes map se match karo
     for (const [magic, mime] of Object.entries(MAGIC_BYTES)) {
-      if (hex.startsWith(magic)) {
-        return mime;
-      }
+      if (hex.startsWith(magic)) return mime;
     }
-
-    return null; // unknown type
+    return null;
   } catch (err) {
     logger.error(`[FileProcessor] Magic bytes read failed: ${err.message}`);
     return null;
   }
 };
 
-/**
- * Multer ka mimeType aur actual magic bytes compare karo
- * @param {string} declaredMime - multer ne jo bataya
- * @param {string} actualMime   - magic bytes se jo mila
- * @returns {boolean}
- */
 const isMimeSafe = (declaredMime, actualMime) => {
-  // actualMime null hai → unknown type → allow karo (strict nahi karna sabke liye)
   if (!actualMime) return true;
   return declaredMime === actualMime;
 };
@@ -69,19 +47,25 @@ const fileProcessorWorker = new Worker(
 
     logger.info(`[FileProcessor] Processing started — fileId: ${fileId}`);
 
-    // ── Step 1: File exist karti hai? ────────────────────────────────────────
+    // Emit: processing started
+    emitToUser(userId, SOCKET_EVENTS.FILE_PROCESSING, {
+      fileId,
+      status: "pending",
+      message: "File processing started",
+    });
+
+    // Step 1: File exist?
     if (!fs.existsSync(filePath)) {
       throw new Error(`File not found on disk: ${filePath}`);
     }
 
-    // ── Step 2: Magic Bytes Check ─────────────────────────────────────────────
+    // Step 2: Magic Bytes Check
     const detectedMime = detectMimeFromMagicBytes(filePath);
     const safe = isMimeSafe(mimeType, detectedMime);
 
     if (!safe) {
-      // Dangerous file — disk se delete karo + DB mein flag karo
       logger.error(
-        `[FileProcessor] MIME mismatch — declared: ${mimeType} | actual: ${detectedMime} | fileId: ${fileId}`,
+        `[FileProcessor] MIME mismatch — declared: ${mimeType} | actual: ${detectedMime} | fileId: ${fileId}`
       );
 
       fs.unlinkSync(filePath);
@@ -91,52 +75,51 @@ const fileProcessorWorker = new Worker(
         processingNote: `MIME mismatch: declared ${mimeType}, actual ${detectedMime}`,
       });
 
+      // Emit: rejected
+      emitToUser(userId, SOCKET_EVENTS.FILE_REJECTED, {
+        fileId,
+        status: "rejected",
+        reason: `MIME mismatch: declared ${mimeType}, actual ${detectedMime}`,
+      });
+
       throw new Error(`MIME mismatch detected — file rejected: ${fileId}`);
     }
 
-    // ── Step 3: Metadata Extract ──────────────────────────────────────────────
+    // Step 3: Metadata Extract
     const stats = fs.statSync(filePath);
-    const ext = path.extname(filePath).toLowerCase();
-
     const metadata = {
-      detectedMimeType: detectedMime || mimeType, // actual ya declared
-      extension: ext,
+      detectedMimeType: detectedMime || mimeType,
+      extension: path.extname(filePath).toLowerCase(),
       sizeBytes: stats.size,
       lastModified: stats.mtime,
     };
 
-    // ── Step 4: DB Update ─────────────────────────────────────────────────────
+    // Step 4: DB Update
     await filesRepository.updateFile(fileId, {
       processingStatus: "completed",
       metadata,
     });
 
+    // Emit: completed
+    emitToUser(userId, SOCKET_EVENTS.FILE_COMPLETED, {
+      fileId,
+      status: "completed",
+      metadata,
+    });
+
     logger.info(`[FileProcessor] Processing completed — fileId: ${fileId}`);
 
-    // thumbnail.job.js ke liye data return karo
-    // (BullMQ job chaining baad mein karenge — abhi return kaafi hai)
-    return {
-      fileId,
-      filePath,
-      mimeType: metadata.detectedMimeType,
-      needsThumbnail: mimeType.startsWith("image/"),
-    };
+    return { fileId, filePath, mimeType: metadata.detectedMimeType };
   },
-  {
-    connection: redisConnection,
-    concurrency: 5, // ek saath 5 files process karo
-  },
+  { connection: redisConnection, concurrency: 5 }
 );
 
-// ─── Worker Events ─────────────────────────────────────────────────────────────
-fileProcessorWorker.on("completed", (job, result) => {
+fileProcessorWorker.on("completed", (job) => {
   logger.info(`[FileProcessor] Worker done — jobId: ${job.id}`);
 });
 
 fileProcessorWorker.on("failed", (job, err) => {
-  logger.error(
-    `[FileProcessor] Worker failed — jobId: ${job.id} | ${err.message}`,
-  );
+  logger.error(`[FileProcessor] Worker failed — jobId: ${job.id} | ${err.message}`);
 });
 
 module.exports = fileProcessorWorker;
