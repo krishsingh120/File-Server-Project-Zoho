@@ -1,215 +1,127 @@
-# 🚀 File Server (Zoho SETU)
+# File Server
 
----
+A cross-platform, GUI-based file server built with Node.js, Express, MongoDB, Redis, and MinIO. Supports authenticated multi-user file management over a network.
 
-## ✅ Final Decision List
+## Features
 
-| Decision     | Choice                       |
-| ------------ | ---------------------------- |
-| Architecture | Modular Monolith             |
-| Language     | JavaScript                   |
-| Framework    | Express.js                   |
-| Database     | MongoDB                      |
-| Cache        | Redis                        |
-| Queue        | BullMQ                       |
-| File Storage | Multer (local) → MinIO later |
-| Auth         | JWT (Access + Refresh Token) |
-| Frontend     | Later (Not in Phase 1)       |
+- JWT Authentication with refresh token rotation
+- Role-based access control (admin, user, viewer)
+- File upload, download, delete, share
+- Nested folder management with cascade delete
+- MinIO object storage (S3-compatible)
+- Real-time upload progress via Socket.io
+- Async file processing with BullMQ
+- Rate limiting with Redis
+- Security hardening (helmet, mongoSanitize, hpp)
+- Structured logging with Winston
+- Docker support
 
----
+## Tech Stack
 
-# 🎯 Features — Backend Only
+| Layer     | Technology                    |
+| --------- | ----------------------------- |
+| Runtime   | Node.js 20 LTS                |
+| Framework | Express.js                    |
+| Database  | MongoDB (Atlas)               |
+| Cache     | Redis                         |
+| Storage   | MinIO (S3-compatible)         |
+| Queue     | BullMQ                        |
+| Realtime  | Socket.io                     |
+| Auth      | JWT (access + refresh tokens) |
+| Container | Docker + Docker Compose       |
 
----
+## Project Structure
 
-## 🟡 Phase 1 — Days 1–3
-
-### Setup
-
-- Express.js project setup
-- MongoDB connection
-- Redis setup
-- Docker basic setup
-
-### Auth Module
-
-- Register
-- Login
-- Logout
-- Refresh Token
-
-### Security
-
-- JWT middleware
-- Protected routes
-
----
-
-## 🟠 Phase 2 — Days 4–6
-
-### Files Module
-
-- Upload file
-- Download file
-- Delete file
-- List files
-
-### Folder Module
-
-- Create folder
-- Rename folder
-- Delete folder
-
-### Validation
-
-- File size validation
-- MIME type validation
-
-### Storage Control
-
-- Storage quota per user
-
----
-
-## 🔴 Phase 3 — Days 7–10
-
-### Async Processing
-
-- BullMQ integration
-- Background file jobs
-
-### Real-time
-
-- WebSocket for upload progress
-
-### Performance & Security
-
-- Rate limiting (Redis)
-
-### Sharing
-
-- Shareable / presigned links
-
-### Logging
-
-- Winston logging
-
-### DevOps
-
-- Docker setup (final)
-
----
-
-
-# 🧾 Commit Types — Github standards
-
----
-
-## 📌 Standard Commit Types
-
-| Type     | Matlab                | Example                              |
-|----------|----------------------|--------------------------------------|
-| feat     | Naya feature         | feat: add user login endpoint        |
-| fix      | Bug fix              | fix: resolve jwt expiry issue        |
-| chore    | Setup / maintenance  | chore: install dependencies          |
-| refactor | Code improve         | refactor: clean auth service         |
-| docs     | Documentation        | docs: add API readme                 |
-| test     | Testing              | test: add auth unit tests            |
-| style    | Formatting           | style: fix indentation               |
-
----
-
-## 🎯 Usage Tips
-
-- Har commit meaningful hona chahiye
-- Ek commit = ek logical change
-- Clear aur concise message likho
-- Lowercase prefix use karo (feat, fix, etc.)
-
----
-
-## 💀 Pro Tip (Interview + Real Projects)
-
-> "I follow conventional commits to maintain clean version history and improve collaboration."
-
----
-
-
-# 📁 Folder Structure — Final
-
-```bash
-file-server/
-├── src/
-│ ├── modules/
-│ │ ├── auth/
-│ │ │ ├── auth.routes.js
-│ │ │ ├── auth.controller.js
-│ │ │ ├── auth.service.js
-│ │ │ ├── auth.repository.js
-│ │ │ └── auth.model.js
-│ │ ├── files/
-│ │ │ ├── files.routes.js
-│ │ │ ├── files.controller.js
-│ │ │ ├── files.service.js
-│ │ │ ├── files.repository.js
-│ │ │ └── files.model.js
-│ │ ├── folders/
-│ │ │ ├── folders.routes.js
-│ │ │ ├── folders.controller.js
-│ │ │ ├── folders.service.js
-│ │ │ └── folders.model.js
-│ │ └── notifications/
-│ │ ├── notifications.gateway.js
-│ │ └── notifications.service.js
-│
-│ ├── providers/
-│ │ ├── redis.provider.js
-│ │ ├── bullmq.provider.js
-│ │ └── minio.provider.js
-│
-│ ├── middleware/
-│ │ ├── auth.middleware.js
-│ │ │ ├── rateLimit.middleware.js
-│ │ │ ├── upload.middleware.js
-│ │ │ └── error.middleware.js
-│
-│ ├── config/
-│ │ ├── db.js
-│ │ ├── redis.js
-│ │ └── env.js
-│
-│ └── app.js
-│
-├── docker-compose.yml
-├── .env.example
-├── server.js
-└── package.json
+```
+src/
+├── modules/
+│   ├── auth/          # Authentication + RBAC
+│   ├── files/         # File operations
+│   ├── folders/       # Folder management
+│   └── notifications/ # Socket.io events
+├── middleware/        # auth, error, security, upload
+├── providers/         # redis, bullmq, minio
+├── config/            # db, env, redis
+├── errors/            # Custom error classes
+└── utils/             # logger, helpers
 ```
 
----
+## Quick Start
 
-# 🧠 Architecture Summary
+### With Docker (Recommended)
 
-- Modular Monolith structure
-- Clean separation of concerns
-- Async background processing via BullMQ
-- Redis for caching & rate limiting
-- Storage abstraction (local → MinIO)
+```bash
+# 1. Clone karo
+git clone https://github.com/krishsingh120/File-Server-Project-Zoho.git
+cd File-Server-Project-Zoho
 
----
+# 2. .env banao
+cp .env.example .env
+# .env mein apni values daalo
 
-# 🔥 Future Scope
+# 3. Start karo
+docker-compose up --build
+```
 
-- Convert to microservices architecture
-- Cloud storage (AWS S3 / MinIO)
-- Chunk upload for large files
-- Role-based access control (RBAC)
-- API Gateway integration
+### Without Docker
 
----
+```bash
+# 1. Dependencies install karo
+npm install
 
-# 💀 Interview One-Liner
+# 2. .env banao
+cp .env.example .env
 
-> "The system is built as a modular monolith with clear module boundaries, async job processing using BullMQ, and storage abstraction to support future scalability and microservices migration."
+# 3. Redis + MinIO locally start karo
 
----
+# 4. Server start karo
+npm run dev
+```
+
+## API Endpoints
+
+### Auth
+
+| Method | Route                 | Description   |
+| ------ | --------------------- | ------------- |
+| POST   | /api/v1/auth/register | Register      |
+| POST   | /api/v1/auth/login    | Login         |
+| POST   | /api/v1/auth/logout   | Logout        |
+| POST   | /api/v1/auth/refresh  | Refresh token |
+| GET    | /api/v1/auth/me       | Current user  |
+
+### Files
+
+| Method | Route                       | Description     |
+| ------ | --------------------------- | --------------- |
+| POST   | /api/v1/files/upload        | Upload file     |
+| GET    | /api/v1/files               | List files      |
+| GET    | /api/v1/files/download/:id  | Download file   |
+| DELETE | /api/v1/files/:id           | Delete file     |
+| POST   | /api/v1/files/share/:id     | Share file      |
+| GET    | /api/v1/files/shared/:token | Download shared |
+| GET    | /api/v1/files/storage       | Storage info    |
+| GET    | /api/v1/files/search        | Search files    |
+
+### Folders
+
+| Method | Route                        | Description     |
+| ------ | ---------------------------- | --------------- |
+| POST   | /api/v1/folders              | Create folder   |
+| GET    | /api/v1/folders              | List folders    |
+| GET    | /api/v1/folders/:id/contents | Folder contents |
+| PATCH  | /api/v1/folders/:id/rename   | Rename folder   |
+| DELETE | /api/v1/folders/:id          | Delete folder   |
+| PATCH  | /api/v1/folders/move/:fileId | Move file       |
+
+## Environment Variables
+
+See `.env.example` for all required variables.
+
+## Architecture
+
+Modular Monolith — each module is independently structured and can be extracted into a microservice. Migration path: Docker containers → separate deployments → message queue communication.
+
+## License
+
+MIT
