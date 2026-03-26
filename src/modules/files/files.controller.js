@@ -53,15 +53,17 @@ class FilesController {
     }
   }
 
-  // Download file
+  // Download file — presigned URL pe redirect
   async downloadFile(req, res, next) {
     try {
       const { fileId } = req.params;
-      const file = await filesService.downloadFile(fileId, req.user.id);
+      const { presignedUrl } = await filesService.downloadFile(
+        fileId,
+        req.user.id,
+      );
 
-      res.download(file.path, file.originalName, (err) => {
-        if (err) next(err);
-      });
+      // MinIO presigned URL pe redirect karo
+      res.redirect(presignedUrl);
     } catch (error) {
       next(error);
     }
@@ -138,15 +140,14 @@ class FilesController {
     }
   }
 
-  // Download shared file — public route
+  // Download shared file — presigned URL pe redirect
   async downloadSharedFile(req, res, next) {
     try {
       const { shareToken } = req.params;
-      const file = await filesService.downloadSharedFile(shareToken);
+      const { presignedUrl } =
+        await filesService.downloadSharedFile(shareToken);
 
-      res.download(file.path, file.originalName, (err) => {
-        if (err) next(err);
-      });
+      res.redirect(presignedUrl);
     } catch (error) {
       next(error);
     }

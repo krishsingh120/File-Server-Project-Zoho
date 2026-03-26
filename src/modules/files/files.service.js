@@ -7,12 +7,18 @@ const authRepository = require("../auth/auth.repository");
 const NotFoundError = require("../../errors/notFound.error");
 const BadRequestError = require("../../errors/badRequest.error");
 const ForbiddenError = require("../../errors/forbidden.error");
-const { addFileProcessingJob } = require("../../providers/bullmq.provider"); // ← NEW
-const { addThumbnailJob } = require("../notifications/jobs/thumbnail.job"); // ← NEW
-const logger = require("../../utils/logger"); // ← NEW
+const { addFileProcessingJob } = require("../../providers/bullmq.provider");
+const { addThumbnailJob } = require("../notifications/jobs/thumbnail.job");
+const {
+  uploadToMinio,
+  getPresignedUrl,
+  deleteFromMinio,
+  MINIO_BUCKET,
+} = require("../../providers/minio.provider");
+const logger = require("../../utils/logger");
 
 class FilesService {
-  // Upload single file
+  // ─── Upload Single File ─────────────────────────────────────────────────────
   async uploadFile(fileData, userId) {
     const user = await authRepository.findById(userId);
     if (!user) throw new NotFoundError("User not found");
@@ -31,42 +37,51 @@ class FilesService {
     );
 
     if (!updatedUser) {
-      fs.unlinkSync(fileData.path);
+      fs.unlinkSync(fileData.path); // temp file delete
       throw new BadRequestError("Storage quota exceeded");
     }
 
-    // File DB mein save karo — processingStatus "pending" se start hoga
+    // MinIO object key — userId/uuid-filename.ext
+    const ext = path.extname(fileData.originalname).toLowerCase();
+    const objectKey = `${userId}/${uuidv4()}-${Date.now()}${ext}`;
+
+    // Local disk → MinIO upload
+    await uploadToMinio(fileData.path, objectKey, fileData.mimetype);
+
+    // Temp file delete — MinIO pe upload ho gaya
+    fs.unlinkSync(fileData.path);
+
+    // DB mein save
     const file = await filesRepository.createFile({
       originalName: fileData.originalname,
-      storedName: path.basename(fileData.path),
+      storedName: path.basename(objectKey),
       mimeType: fileData.mimetype,
       size: fileData.size,
-      path: fileData.path,
+      objectKey, // ← MinIO path
+      bucketName: MINIO_BUCKET, // ← MinIO bucket
       owner: userId,
       folderId: fileData.folderId || null,
-      processingStatus: "pending", // ← NEW: BullMQ process karega
+      processingStatus: "pending",
     });
 
-    // ── BullMQ: File Processing Job Queue mein daalo ──────────────────────────
+    // BullMQ jobs — objectKey pass karo (filePath ki jagah)
     try {
       await addFileProcessingJob({
         fileId: file._id.toString(),
-        filePath: file.path,
+        objectKey: file.objectKey, // ← path nahi, objectKey
         mimeType: file.mimeType,
         userId: userId.toString(),
       });
 
-      // Image hai toh thumbnail job bhi daalo
       if (file.mimeType.startsWith("image/")) {
         await addThumbnailJob({
           fileId: file._id.toString(),
-          filePath: file.path,
+          objectKey: file.objectKey,
           mimeType: file.mimeType,
+          userId: userId.toString(),
         });
       }
     } catch (jobError) {
-      // Job fail hone pe upload cancel nahi karte — sirf log karo
-      // File already save ho gayi — background processing optional hai
       logger.error(
         `[FilesService] BullMQ job add failed — fileId: ${file._id} | ${jobError.message}`,
       );
@@ -75,7 +90,7 @@ class FilesService {
     return file;
   }
 
-  // Upload multiple files
+  // ─── Upload Multiple Files ──────────────────────────────────────────────────
   async uploadMultipleFiles(files, userId, folderId = null) {
     const uploadedFiles = [];
     const failedFiles = [];
@@ -92,7 +107,7 @@ class FilesService {
     return { uploadedFiles, failedFiles };
   }
 
-  // Download file
+  // ─── Download File — Presigned URL ─────────────────────────────────────────
   async downloadFile(fileId, userId) {
     const file = await filesRepository.findById(fileId);
     if (!file) throw new NotFoundError("File not found");
@@ -105,16 +120,15 @@ class FilesService {
       }
     }
 
-    if (!fs.existsSync(file.path)) {
-      throw new NotFoundError("File not found on disk");
-    }
+    // MinIO se presigned URL banao — 1 hour valid
+    const presignedUrl = await getPresignedUrl(file.objectKey, 3600);
 
     await filesRepository.incrementDownloadCount(fileId);
 
-    return file;
+    return { file, presignedUrl }; // ← controller presignedUrl redirect karega
   }
 
-  // Delete file
+  // ─── Delete File ────────────────────────────────────────────────────────────
   async deleteFile(fileId, userId) {
     const file = await filesRepository.findById(fileId);
     if (!file) throw new NotFoundError("File not found");
@@ -125,16 +139,15 @@ class FilesService {
       );
     }
 
-    if (fs.existsSync(file.path)) {
-      fs.unlinkSync(file.path);
-    }
+    // MinIO se delete karo
+    await deleteFromMinio(file.objectKey);
 
     // Thumbnail bhi delete karo agar hai
-    if (file.thumbnailPath && fs.existsSync(file.thumbnailPath)) {
-      // ← NEW
-      fs.unlinkSync(file.thumbnailPath);
+    if (file.thumbnailKey) {
+      await deleteFromMinio(file.thumbnailKey);
     }
 
+    // Storage quota update
     const fileSizeMB = file.size / (1024 * 1024);
     await authRepository.updateUser(
       { _id: userId },
@@ -146,13 +159,13 @@ class FilesService {
     return { message: "File deleted successfully" };
   }
 
-  // List files
+  // ─── List Files ─────────────────────────────────────────────────────────────
   async listFiles(userId, folderId = null) {
     const files = await filesRepository.findByOwner(userId, folderId);
     return files;
   }
 
-  // Search files
+  // ─── Search Files ────────────────────────────────────────────────────────────
   async searchFiles(userId, query) {
     if (!query || query.trim() === "") {
       throw new BadRequestError("Search query is required");
@@ -161,7 +174,7 @@ class FilesService {
     return files;
   }
 
-  // Generate share link
+  // ─── Share File ──────────────────────────────────────────────────────────────
   async shareFile(fileId, userId, expiresInHours = 24) {
     const file = await filesRepository.findById(fileId);
     if (!file) throw new NotFoundError("File not found");
@@ -184,7 +197,7 @@ class FilesService {
     return { shareToken, shareExpiresAt, file: updatedFile };
   }
 
-  // Download via share token
+  // ─── Download via Share Token ────────────────────────────────────────────────
   async downloadSharedFile(shareToken) {
     const file = await filesRepository.findByShareToken(shareToken);
     if (!file) throw new NotFoundError("Shared file not found");
@@ -193,16 +206,14 @@ class FilesService {
       throw new BadRequestError("Share link has expired");
     }
 
-    if (!fs.existsSync(file.path)) {
-      throw new NotFoundError("File not found on disk");
-    }
+    const presignedUrl = await getPresignedUrl(file.objectKey, 3600);
 
     await filesRepository.incrementDownloadCount(file._id);
 
-    return file;
+    return { file, presignedUrl };
   }
 
-  // Storage info
+  // ─── Storage Info ────────────────────────────────────────────────────────────
   async getStorageInfo(userId) {
     const user = await authRepository.findById(userId);
     if (!user) throw new NotFoundError("User not found");

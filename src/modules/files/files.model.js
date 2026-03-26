@@ -20,10 +20,18 @@ const fileSchema = new mongoose.Schema(
       type: Number,
       required: true, // bytes mein
     },
-    path: {
+
+    // ── Storage ──────────────────────────────────────────────────────────────
+    // path: remove — ab MinIO use karte hain local disk nahi
+    objectKey: {
       type: String,
-      required: true, // disk pe actual path
+      required: true, // MinIO mein path — "userId/uuid-filename.jpg"
     },
+    bucketName: {
+      type: String,
+      required: true, // "file-server"
+    },
+
     owner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -32,7 +40,7 @@ const fileSchema = new mongoose.Schema(
     folderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Folder",
-      default: null, // null = root folder
+      default: null,
     },
     isShared: {
       type: Boolean,
@@ -51,7 +59,7 @@ const fileSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // ── BullMQ Processing Fields ─────────────────────────────────────────────
+    // ── BullMQ Processing Fields ──────────────────────────────────────────────
     processingStatus: {
       type: String,
       enum: ["pending", "completed", "rejected"],
@@ -59,30 +67,27 @@ const fileSchema = new mongoose.Schema(
     },
     processingNote: {
       type: String,
-      default: null, // MIME mismatch hone pe reason yahan aayega
+      default: null,
     },
     metadata: {
-      detectedMimeType: { type: String, default: null }, // magic bytes se actual type
+      detectedMimeType: { type: String, default: null },
       extension: { type: String, default: null },
       sizeBytes: { type: Number, default: null },
       lastModified: { type: Date, default: null },
     },
-    thumbnailPath: {
+    thumbnailKey: {
       type: String,
-      default: null, // sirf images ke liye — 200x200 jpeg path
+      default: null, // MinIO mein thumbnail ka objectKey
     },
   },
-  {
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-// Index for faster queries
+// Indexes
 fileSchema.index({ owner: 1 });
 fileSchema.index({ folderId: 1 });
 fileSchema.index({ shareToken: 1 });
-fileSchema.index({ processingStatus: 1 }); // ← pending files quickly fetch karne ke liye
+fileSchema.index({ processingStatus: 1 });
 
 const File = mongoose.model("File", fileSchema);
-
 module.exports = File;
