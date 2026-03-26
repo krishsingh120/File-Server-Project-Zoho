@@ -1,0 +1,100 @@
+Project: File Server (Zoho SETU Internship)
+Tech Stack: Node.js, Express.js, MongoDB Atlas, Redis (local), JWT Auth, BullMQ, Multer, CommonJS (require/module.exports)
+Architecture: Modular Monolith
+Folder Structure:
+file-server/
+├── src/
+│   ├── modules/auth/ files/ folders/ notifications/(empty)
+│   ├── providers/ (empty)
+│   ├── middleware/ → auth, upload, error, rateLimiter
+│   ├── errors/ → base, badRequest, unauthorized, forbidden, notFound, internalServer
+│   ├── config/ → db.js, redisConfig.js, env.js
+│   ├── utils/ → logger.js (winston, sirf files — error.log + combined.log)
+│   └── app.js
+└── server.js
+Completed:
+
+Auth — register, login, logout, refresh, me ✅
+Files — upload, upload-multiple, list, search, download, delete, share, storage ✅
+Folders — create, list, contents, rename, delete(cascade), move file ✅
+Rate Limiting — authLimiter(10/15min), uploadLimiter(50/hr), globalLimiter(100/min) — memory store (Redis store fix pending) ✅
+Winston Logging — sirf files (logs/error.log + logs/combined.log), morgan integrated ✅
+
+Current Status — Winston almost done:
+
+logger.js — Console(dev only) + File transports ✅
+error.middleware.js — logger integrated ✅
+app.js — morgan → winston stream integrated ✅
+logger.js mein http level add karna bacha hai ⬅️ YAHAN SE SHURU KARO
+
+Pending Steps:
+
+Step 2 — BullMQ (async jobs — file processing, virus scan)
+Step 3 — WebSocket (socket.io — upload progress)
+Step 6 — Docker
+Step 7 — Frontend (React)
+
+Important Patterns:
+
+Error: throw new NotFoundError('msg')
+Repository pattern — service mein direct DB call nahi
+JWT: authenticate + authorize('admin') middleware
+CommonJS everywhere
+
+Key Files:
+
+src/config/env.js — sab env variables export karta hai
+src/config/redisConfig.js — ioredis instance
+src/middleware/rateLimiter.middleware.js — custom store (ioredis .call())
+src/utils/logger.js — winston, NODE_ENV based
+
+
+
+
+
+
+
+
+
+uploadFile() 
+  → DB mein save (processingStatus: "pending")
+  → addFileProcessingJob() → Redis Queue
+  → image hai? → addThumbnailJob() → Redis Queue
+  → Response user ko milta hai (fast ✅)
+
+Background (async):
+  fileProcessorWorker
+    → magic bytes check (fake extension detect)
+    → MIME mismatch? → file delete + DB rejected
+    → safe? → metadata extract → DB completed
+
+  thumbnailWorker
+    → sharp se 200x200 thumbnail banao
+    → thumbnailPath DB mein save
+
+
+
+
+
+
+Upload → DB save (pending) → Queue mein job → Worker background mein:
+  → Magic bytes check → MIME mismatch? file delete + rejected
+  → Safe? → metadata save + completed
+  → Image? → Thumbnail generate → thumbnailPath save
+
+
+
+
+
+
+
+
+Client connects → Socket.io handshake → JWT verify
+       ↓
+File upload (HTTP) → BullMQ job queue
+       ↓
+Worker processes file → job complete/failed
+       ↓
+Server socket emit → sirf usi user ko notify
+       ↓
+Client pe real-time event → "File processing complete!"

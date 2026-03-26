@@ -1,10 +1,10 @@
-// src/app.js
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
 const errorHandler = require("./middleware/error.middleware");
 const NotFoundError = require("./errors/notFound.error");
+const logger = require("./utils/logger");
 
 // Routes
 const authRoutes = require("./modules/auth/auth.routes");
@@ -23,7 +23,11 @@ app.use(
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(morgan("dev"));
+
+// Morgan — winston ke saath integrate
+app.use(
+  morgan("combined", { stream: logger.stream }),
+);
 
 // Health Check
 app.get("/health", (req, res) => {

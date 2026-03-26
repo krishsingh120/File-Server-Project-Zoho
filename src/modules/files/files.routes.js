@@ -1,9 +1,9 @@
-// src/modules/files/files.routes.js
 const express = require("express");
 const router = express.Router();
 const filesController = require("./files.controller");
 const { authenticate } = require("../../middleware/auth.middleware");
 const upload = require("../../middleware/upload.middleware");
+const { uploadLimiter } = require("../../middleware/rateLimiter.middleware");
 
 // Public route — shared file download (auth nahi chahiye)
 router.get(
@@ -21,14 +21,16 @@ router.get("/storage", filesController.getStorageInfo.bind(filesController));
 router.get("/", filesController.listFiles.bind(filesController));
 router.get("/search", filesController.searchFiles.bind(filesController));
 
-// Upload
+// Upload — uploadLimiter lagao
 router.post(
   "/upload",
+  uploadLimiter,
   upload.single("file"),
   filesController.uploadFile.bind(filesController),
 );
 router.post(
   "/upload-multiple",
+  uploadLimiter,
   upload.array("files", 10),
   filesController.uploadMultipleFiles.bind(filesController),
 );

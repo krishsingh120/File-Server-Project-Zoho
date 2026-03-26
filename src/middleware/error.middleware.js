@@ -1,4 +1,7 @@
+const logger = require("../utils/logger");
+
 const sendDevError = (err, res) => {
+  logger.error(`DEV ERROR: ${err.message} | Stack: ${err.stack}`); // ← add
   res.status(err.statusCode).json({
     status: err.status,
     message: err.message,
@@ -8,18 +11,21 @@ const sendDevError = (err, res) => {
 
 const sendProdError = (err, res) => {
   if (err.isOperational) {
+    logger.warn(`OPERATIONAL ERROR: ${err.statusCode} | ${err.message}`); // ← add
     res.status(err.statusCode).json({
       status: err.status,
       message: err.message,
     });
   } else {
-    console.error("ERROR:", err);
+    logger.error(`UNHANDLED ERROR: ${err.message} | Stack: ${err.stack}`); // ← console.error replace
     res.status(500).json({
       status: "error",
       message: "Something went wrong",
     });
   }
 };
+
+// baaki sab same rehega...
 
 const handleCastErrorDB = () => {
   const { BadRequestError } = require("../errors/badRequest.error");

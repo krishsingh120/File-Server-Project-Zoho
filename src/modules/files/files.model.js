@@ -50,6 +50,27 @@ const fileSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // ── BullMQ Processing Fields ─────────────────────────────────────────────
+    processingStatus: {
+      type: String,
+      enum: ["pending", "completed", "rejected"],
+      default: "pending",
+    },
+    processingNote: {
+      type: String,
+      default: null, // MIME mismatch hone pe reason yahan aayega
+    },
+    metadata: {
+      detectedMimeType: { type: String, default: null }, // magic bytes se actual type
+      extension: { type: String, default: null },
+      sizeBytes: { type: Number, default: null },
+      lastModified: { type: Date, default: null },
+    },
+    thumbnailPath: {
+      type: String,
+      default: null, // sirf images ke liye — 200x200 jpeg path
+    },
   },
   {
     timestamps: true,
@@ -60,6 +81,7 @@ const fileSchema = new mongoose.Schema(
 fileSchema.index({ owner: 1 });
 fileSchema.index({ folderId: 1 });
 fileSchema.index({ shareToken: 1 });
+fileSchema.index({ processingStatus: 1 }); // ← pending files quickly fetch karne ke liye
 
 const File = mongoose.model("File", fileSchema);
 

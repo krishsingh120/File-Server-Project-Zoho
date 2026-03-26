@@ -7,6 +7,9 @@ const authRepository = require("../auth/auth.repository");
 const NotFoundError = require("../../errors/notFound.error");
 const BadRequestError = require("../../errors/badRequest.error");
 const ForbiddenError = require("../../errors/forbidden.error");
+const { addFileProcessingJob } = require("../../providers/bullmq.provider"); // ← NEW
+const { addThumbnailJob } = require("../notifications/jobs/thumbnail.job"); // ← NEW
+const logger = require("../../utils/logger"); // ← NEW
 
 class FilesService {
   // Upload single file
@@ -14,7 +17,6 @@ class FilesService {
     const user = await authRepository.findById(userId);
     if (!user) throw new NotFoundError("User not found");
 
-    // Size bytes to MB convert karo
     const fileSizeMB = fileData.size / (1024 * 1024);
 
     // Quota check — atomic update
@@ -29,11 +31,11 @@ class FilesService {
     );
 
     if (!updatedUser) {
-      // Quota exceed — uploaded file delete karo
       fs.unlinkSync(fileData.path);
       throw new BadRequestError("Storage quota exceeded");
     }
 
+    // File DB mein save karo — processingStatus "pending" se start hoga
     const file = await filesRepository.createFile({
       originalName: fileData.originalname,
       storedName: path.basename(fileData.path),
@@ -42,7 +44,33 @@ class FilesService {
       path: fileData.path,
       owner: userId,
       folderId: fileData.folderId || null,
+      processingStatus: "pending", // ← NEW: BullMQ process karega
     });
+
+    // ── BullMQ: File Processing Job Queue mein daalo ──────────────────────────
+    try {
+      await addFileProcessingJob({
+        fileId: file._id.toString(),
+        filePath: file.path,
+        mimeType: file.mimeType,
+        userId: userId.toString(),
+      });
+
+      // Image hai toh thumbnail job bhi daalo
+      if (file.mimeType.startsWith("image/")) {
+        await addThumbnailJob({
+          fileId: file._id.toString(),
+          filePath: file.path,
+          mimeType: file.mimeType,
+        });
+      }
+    } catch (jobError) {
+      // Job fail hone pe upload cancel nahi karte — sirf log karo
+      // File already save ho gayi — background processing optional hai
+      logger.error(
+        `[FilesService] BullMQ job add failed — fileId: ${file._id} | ${jobError.message}`,
+      );
+    }
 
     return file;
   }
@@ -69,9 +97,7 @@ class FilesService {
     const file = await filesRepository.findById(fileId);
     if (!file) throw new NotFoundError("File not found");
 
-    // Owner check — sirf apni file download kar sakte ho
     if (file.owner.toString() !== userId.toString()) {
-      // Shared file check
       if (!file.isShared) {
         throw new ForbiddenError(
           "You do not have permission to download this file",
@@ -79,7 +105,6 @@ class FilesService {
       }
     }
 
-    // File disk pe exist karti hai?
     if (!fs.existsSync(file.path)) {
       throw new NotFoundError("File not found on disk");
     }
@@ -94,26 +119,28 @@ class FilesService {
     const file = await filesRepository.findById(fileId);
     if (!file) throw new NotFoundError("File not found");
 
-    // Sirf owner delete kar sakta hai
     if (file.owner.toString() !== userId.toString()) {
       throw new ForbiddenError(
         "You do not have permission to delete this file",
       );
     }
 
-    // Disk se delete karo
     if (fs.existsSync(file.path)) {
       fs.unlinkSync(file.path);
     }
 
-    // Storage quota update karo
+    // Thumbnail bhi delete karo agar hai
+    if (file.thumbnailPath && fs.existsSync(file.thumbnailPath)) {
+      // ← NEW
+      fs.unlinkSync(file.thumbnailPath);
+    }
+
     const fileSizeMB = file.size / (1024 * 1024);
     await authRepository.updateUser(
       { _id: userId },
       { $inc: { storageUsedMB: -fileSizeMB } },
     );
 
-    // MongoDB se delete karo
     await filesRepository.deleteFile(fileId);
 
     return { message: "File deleted successfully" };
@@ -162,7 +189,6 @@ class FilesService {
     const file = await filesRepository.findByShareToken(shareToken);
     if (!file) throw new NotFoundError("Shared file not found");
 
-    // Expiry check
     if (file.shareExpiresAt && new Date() > file.shareExpiresAt) {
       throw new BadRequestError("Share link has expired");
     }

@@ -5,8 +5,6 @@ dotenv.config();
 // console.log(process.env.REDIS_HOST);
 // console.log(process.env.REDIS_PORT);
 
-
-
 module.exports = {
   PORT: process.env.PORT || 5000,
   NODE_ENV: process.env.NODE_ENV || "development",
@@ -17,4 +15,5 @@ module.exports = {
   JWT_REFRESH_EXPIRES: process.env.JWT_REFRESH_EXPIRES || "7d",
   REDIS_HOST: process.env.REDIS_HOST || "localhost",
   REDIS_PORT: process.env.REDIS_PORT || 6379,
+  LOG_DB_URL: process.env.LOG_DB_URL, // ← add karo
 };
