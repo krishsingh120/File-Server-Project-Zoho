@@ -10,6 +10,7 @@ const {
   mongoSanitizeConfig,
   hppConfig,
 } = require("./middleware/security.middleware");
+const serverAdapter = require("./config/bullBoardUi.Config");
 
 // Routes
 const authRoutes = require("./modules/auth/auth.routes");
@@ -50,6 +51,9 @@ app.get("/health", (req, res) => {
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/files", filesRoutes);
 app.use("/api/v1/folders", foldersRoutes);
+
+// Bull Board UI
+app.use("/admin/bull-board", serverAdapter.getRouter());
 
 // 404 Handler
 app.use((req, res, next) => {

@@ -15,6 +15,8 @@
     "supertest": "^7.2.2"
   },
   "dependencies": {
+    "@bull-board/express": "^6.20.6",
+    "@bull-board/ui": "^6.20.6",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.71.1",
     "cookie-parser": "^1.4.7",
