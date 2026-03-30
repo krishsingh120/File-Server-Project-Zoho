@@ -1,0 +1,7 @@
+node_modules/
+.env
+uploads/
+logs/
+*.log
+test.txt
+Architecture/
