@@ -15,18 +15,15 @@ const helmetConfig = helmet({
   crossOriginEmbedderPolicy: false, // MinIO presigned URLs ke liye
 });
 
-const mongoSanitizeConfig = mongoSanitize({
-  replaceWith: "_", // $ ko _ se replace karo
-  onSanitizeError: (req, res) => {
-    res.status(400).json({
-      status: "fail",
-      message: "Invalid characters detected in request",
-    });
-  },
-});
+// Fix: req.query readonly hai Express 5 mein — sirf body + params sanitize karo
+const mongoSanitizeConfig = (req, res, next) => {
+  if (req.body) mongoSanitize.sanitize(req.body, { replaceWith: "_" });
+  if (req.params) mongoSanitize.sanitize(req.params, { replaceWith: "_" });
+  next();
+};
 
 const hppConfig = hpp({
-  whitelist: ["sort", "fields", "page", "limit"], // ye params array mein aa sakte hain
+  whitelist: ["sort", "fields", "page", "limit"],
 });
 
 module.exports = { helmetConfig, mongoSanitizeConfig, hppConfig };
